@@ -17,8 +17,7 @@ const FileCard = ({ fileUrl, handleDeleteFile, readOnly = false }: { fileUrl: st
                 {fileUrl.split('/').pop()}
             </a>
             {!readOnly && <button
-                className="absolute z-50 -top-5 -right-3 text-white bg-red-500 hover:bg-red-700 rounded-full p-1 
-                opacity-0 group-hover:opacity-100 transition-opacity duration-100 ease-in-out scale-75"
+                className="absolute z-50 -top-5 -right-3 text-white bg-red-500 hover:bg-red-700 rounded-full p-1 transition-opacity duration-100 ease-in-out scale-75"
                 onClick={() => {
                     if (deletionInProgress) return;
                     setDeletionInProgress(true);

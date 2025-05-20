@@ -101,7 +101,9 @@ export default function ChatInterface() {
         <div className="p-4 border-b border-neutral-200 flex items-center space-x-3">
           <div className="w-8 h-8 relative">
             <Image
-              src="/GreenBlack.png"
+              priority
+              src="GreenBlack.png"
+              width={100}
               alt="Logo"
               fill
               className="object-contain"
@@ -161,7 +163,9 @@ export default function ChatInterface() {
               <div className="h-full flex flex-col items-center justify-center text-center p-6">
                 <div className="w-16 h-16 relative mb-4">
                   <Image
-                    src="/GreenBlack.png"
+                    priority
+                    src="GreenBlack.png"
+                    width={100}
                     alt="Logo"
                     fill
                     className="object-contain"
