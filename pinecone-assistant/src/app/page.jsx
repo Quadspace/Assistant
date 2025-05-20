@@ -11,6 +11,27 @@ export default function ChatInterface() {
   const [references, setReferences] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [pineconeAssistantFiles, setPineconeAssistantFiles] = useState([]);
+
+  // Fetch files from Pinecone Assistant
+  const fetchPineconeAssistantFiles = async () => {
+    try {
+      const response = await fetch('/api/files');
+      const data = await response.json();
+      if (data.status === 'success') {
+        setPineconeAssistantFiles(data.files);
+        console.log('Files from Pinecone Assistant:', data.files); // Log fetched files
+      } else {
+        console.error('Error fetching files from Pinecone Assistant:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching files from Pinecone Assistant:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchPineconeAssistantFiles(); // Fetch files on component mount
+  }, []);
 
   // Handle message submission
   const handleSubmit = async (e) => {
