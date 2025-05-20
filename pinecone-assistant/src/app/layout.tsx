@@ -1,14 +1,11 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-
 const inter = Inter({ subsets: ["latin"] });
-
 export const metadata: Metadata = {
-  title: "Forklift Assistant Sample App",
-  description: "Connect a chat interface to an existing Forklift Assistant",
+  title: "Industrial Engineer.ai Assistant",
+  description: "Connect a chat interface to an existing Pinecone Assistant for Industrial Engineer.ai",
 };
-
 export default function RootLayout({
   children,
 }: Readonly<{

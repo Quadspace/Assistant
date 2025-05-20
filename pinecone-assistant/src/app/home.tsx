@@ -1,72 +1,47 @@
-'use client';
-
-import { useState, useEffect, FormEvent, useRef, useCallback } from 'react';
-import { readStreamableValue } from 'ai/rsc';
-import { chat } from './actions';
+'use client'
+import { useState, useEffect, useRef } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import ReactMarkdown from 'react-markdown';
+import { Message, File, Reference } from './types';
 import AssistantFiles from './components/AssistantFiles';
-import { File, Reference, Message } from './types';
-import { v4 as uuidv4 } from 'uuid'; 
-
+import { chat } from './actions';
 interface HomeProps {
   initialShowAssistantFiles: boolean;
   showCitations: boolean;
 }
-
 export default function Home({ initialShowAssistantFiles, showCitations }: HomeProps) {
-  const [loading, setLoading] = useState(true);
-  const [assistantExists, setAssistantExists] = useState(false);
-  const [error, setError] = useState('');
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [assistantName, setAssistantName] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [assistantExists, setAssistantExists] = useState<boolean | null>(null);
+  const [assistantName, setAssistantName] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [referencedFiles, setReferencedFiles] = useState<Reference[]>([]);
   const [showAssistantFiles, setShowAssistantFiles] = useState(initialShowAssistantFiles);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [files, setFiles] = useState<File[]>([]);
-  const [darkMode, setDarkMode] = useState(false);
-
   useEffect(() => {
-    // Check for dark mode preference
-    if (typeof window !== 'undefined') {
-      const isDarkMode = localStorage.getItem('darkMode') === 'true';
-      setDarkMode(isDarkMode);
-      if (isDarkMode) {
-        document.documentElement.classList.add('dark');
+    // Check if the assistant exists
+    const checkAssistant = async () => {
+      try {
+        const response = await fetch('/api/assistants');
+        const data = await response.json();
+        if (data.status === 'success') {
+          setAssistantExists(data.exists);
+          setAssistantName(data.assistant_name);
+          if (data.exists) {
+            fetchFiles();
+          }
+        } else {
+          setError(data.message);
+        }
+      } catch (err) {
+        setError('Failed to check assistant status. Please try again later.');
+        console.error('Error checking assistant:', err);
       }
-    }
-  }, []);
-
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('darkMode', (!darkMode).toString());
-      document.documentElement.classList.toggle('dark');
-    }
-  };
-
-  const extractReferences = (content: string): Reference[] => {
-    const references: Reference[] = [];
-    
-    // Extract full file names from the content
-    const fileNameRegex = /([^:\n]+\.[a-zA-Z0-9]+)/g;
-    const fileMatches = content.match(fileNameRegex);
-    
-    if (fileMatches) {
-      fileMatches.forEach(fileName => {
-        references.push({ name: fileName.trim() });
-      });
-    }
-
-    return references;
-  };
-
-  useEffect(() => {
+    };
     checkAssistant();
-    fetchFiles();
   }, []);
-
   const fetchFiles = async () => {
     try {
       const response = await fetch('/api/files');
@@ -76,165 +51,161 @@ export default function Home({ initialShowAssistantFiles, showCitations }: HomeP
       } else {
         console.error('Error fetching files:', data.message);
       }
-    } catch (error) {
-      console.error('Error fetching files:', error);
+    } catch (err) {
+      console.error('Error fetching files:', err);
     }
   };
-
-  const checkAssistant = async () => {
-    try {
-      const response = await fetch('/api/assistants')
-      const data = await response.json()
-      
-      setLoading(false)
-      setAssistantExists(data.exists)
-      setAssistantName(data.assistant_name)
-      if (!data.exists) {
-        setError('Please create an Assistant')
-      }
-    } catch (error) {
-      setLoading(false)
-      setError('Error connecting to the Assistant')
-      
-    }
-  }
-
   const handleChat = async () => {
-    if (!input.trim()) return;
-
-    const newUserMessage: Message = {
-      id: uuidv4(), // Generate a unique ID
-      role: 'user',
+    if (!input.trim() || isStreaming) return;
+    const userMessage: Message = {
+      id: uuidv4(),
       content: input,
-      timestamp: new Date().toISOString() 
+      role: 'user',
+      timestamp: new Date().toISOString(),
     };
-
-    setMessages(prevMessages => [...prevMessages, newUserMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsStreaming(true);
-
+    setError(null);
+    const newReferences: Reference[] = [];
     try {
-      const { object } = await chat([newUserMessage]);
-      let accumulatedContent = '';
-      const newAssistantMessage: Message = {
+      const assistantMessage: Message = {
         id: uuidv4(),
-        role: 'assistant',
         content: '',
+        role: 'assistant',
         timestamp: new Date().toISOString(),
-        references: []
       };
-      
-      setMessages(prevMessages => [...prevMessages, newAssistantMessage]);
-
-      // Process the response stream from the Assistant that is created in the ./actions.ts Server action
-      for await (const chunk of readStreamableValue(object)) {
-        try {
-          const data = JSON.parse(chunk);
-          const content = data.choices[0]?.delta?.content;
-          
-          if (content) {
-            accumulatedContent += content;
+      setMessages((prev) => [...prev, assistantMessage]);
+      const response = await chat(messages.concat(userMessage).map(m => ({ role: m.role, content: m.content })));
+      const reader = response.object.getReader();
+      let done = false;
+      let content = '';
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          try {
+            const data = JSON.parse(value);
+            if (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.content) {
+              content += data.choices[0].delta.content;
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1],
+                  content,
+                };
+                return updated;
+              });
+            }
+            // Check for references/citations in the response
+            if (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.references) {
+              const refs = data.choices[0].delta.references;
+              refs.forEach((ref: Reference) => {
+                if (!newReferences.some(r => r.name === ref.name)) {
+                  newReferences.push(ref);
+                }
+              });
+            }
+          } catch (e) {
+            console.error('Error parsing stream data:', e);
           }
-          
-          setMessages(prevMessages => {
-            const updatedMessages = [...prevMessages];
-            const lastMessage = updatedMessages[updatedMessages.length - 1];
-            lastMessage.content = accumulatedContent;
-            return updatedMessages;
-          });
-
-        } catch (error) {
-          console.error('Error parsing chunk:', error);
         }
       }
-
-      // Extract references after the full message is received
-      const extractedReferences = extractReferences(accumulatedContent);
-      setReferencedFiles(extractedReferences);
-
-    } catch (error) {
-      console.error('Error in chat:', error);
-      setError('An error occurred while chatting.');
+      if (newReferences.length > 0) {
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            references: newReferences,
+          };
+          return updated;
+        });
+        setReferencedFiles((prev) => {
+          const combined = [...prev];
+          newReferences.forEach(ref => {
+            if (!combined.some(r => r.name === ref.name)) {
+              combined.push(ref);
+            }
+          });
+          return combined;
+        });
+      }
+    } catch (err) {
+      console.error('Error in chat:', err);
+      setError('Failed to get a response. Please try again later.');
     } finally {
       setIsStreaming(false);
     }
   };
-
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 bg-gray-50 dark:bg-gray-900">
-      <button
-        onClick={toggleDarkMode}
-        className="absolute top-4 right-4 p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-        aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-      >
-        {darkMode ? (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-        ) : (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          </svg>
+    <main className="flex min-h-screen flex-col items-center justify-between p-4 md:p-8 bg-gray-50 dark:bg-gray-900">
+      <div className="w-full max-w-5xl">
+        <h1 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-200">Pinecone Assistant</h1>
+        {assistantExists !== null && (
+          <div className="text-sm mb-4 text-gray-600 dark:text-gray-400">
+            {assistantExists ? (
+              <span>Connected to assistant: <span className="font-semibold">{assistantName}</span></span>
+            ) : (
+              <span className="text-red-500">No assistant found with name: <span className="font-semibold">{assistantName}</span></span>
+            )}
+          </div>
         )}
-      </button>
-      {loading ? (
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-900 mb-4"></div>
-          <p className="text-gray-500">Connecting to your Assistant...</p>
-        </div>
-      ) : assistantExists ? (
-        <div className="w-full max-w-6xl xl:max-w-7xl">
-          <h1 className="text-2xl font-bold mb-4 text-indigo-900 dark:text-indigo-100"><a href="https://www.pinecone.io/blog/pinecone-assistant/" target="_blank" rel="noopener noreferrer" className="hover:underline">Pinecone Assistant</a>: {assistantName} <span className="text-green-500">●</span></h1>
-          <div className="flex flex-col gap-4">
-            <div className="w-full">
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg mb-4 h-[calc(100vh-500px)] overflow-y-auto">
-                {messages.map((message, index) => (
-                  <div key={index} className={`mb-2 flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`flex items-start ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                      <div className={`${message.role === 'user' ? 'ml-2' : 'mr-2'}`}>
-                        {message.role === 'user' ? (
-                          <span className="text-2xl">👤</span>
-                        ) : (
-                          <a href="https://www.pinecone.io/blog/pinecone-assistant/" target="_blank" rel="noopener noreferrer">
-                            <img
-                              src="/pinecone-logo.png"
-                              alt="Pinecone Assistant"
-                              className="w-6 h-6 rounded-full object-cover"
-                            />
-                          </a>
-                        )}
-                      </div>
-                      <span className={`inline-block p-2 rounded-lg ${
-                        message.role === 'user' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                      } max-w-[80%] break-words`}>
-                        <ReactMarkdown
-                          components={{
-                            a: ({ node, ...props }) => (
-                              <a {...props} className="text-blue-600 dark:text-blue-400 hover:underline">
-                                🔗 {props.children}
-                              </a>
-                            ),
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
-                        {message.references && showCitations && (
-                          <div className="mt-2">
-                            <ul>
-                              {message.references.map((ref, i) => (
-                                <li key={i}>
-                                  <a href={ref.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
-                                    {ref.name}
-                                  </a>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </span>
-                    </div>
+      </div>
+      {assistantExists ? (
+        <div className="w-full max-w-5xl bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+          <div className="flex flex-col md:flex-row h-[calc(100vh-200px)]">
+            <div className="flex-grow flex flex-col p-4 overflow-hidden">
+              <div className="flex-grow overflow-y-auto mb-4 space-y-4">
+                {messages.length === 0 ? (
+                  <div className="text-center text-gray-500 dark:text-gray-400 mt-8">
+                    <p>Start a conversation with your Pinecone Assistant.</p>
+                    <p className="text-sm mt-2">Your assistant has access to files you've uploaded to it.</p>
                   </div>
-                ))}
+                ) : (
+                  messages.map((message) => (
+                    <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`flex ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'} items-start max-w-[80%]`}>
+                        <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${
+                          message.role === 'user' ? 'bg-indigo-100 text-indigo-500' : 'bg-gray-100 text-gray-500'
+                        } mr-2 ml-2`}>
+                          {message.role === 'user' ? '👤' : '🤖'}
+                        </div>
+                        <span className={`px-4 py-2 rounded-lg ${
+                          message.role === 'user' ? 
+                          'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                        } max-w-[80%] break-words`}>
+                          <ReactMarkdown
+                            components={{
+                              a: ({ node, ...props }) => (
+                                <a {...props} className="text-blue-600 dark:text-blue-400 hover:underline">
+                                  🔗 {props.children}
+                                </a>
+                              ),
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                          {message.references && showCitations && (
+                            <div className="mt-2">
+                              <ul>
+                                {message.references.map((ref, i) => (
+                                  <li key={i}>
+                                    <a href={ref.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+                                      {ref.name}
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
                 <div ref={messagesEndRef} />
               </div>
               <form onSubmit={(e) => { e.preventDefault(); handleChat(); }} className="flex mb-4">

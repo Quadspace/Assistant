@@ -1,30 +1,24 @@
 'use client'
-
 import { useState } from 'react';
 import { File, Reference } from '../types';
-
 interface AssistantFilesProps {
   files: File[];
   referencedFiles: Reference[];
 }
-
 export default function AssistantFiles({ files, referencedFiles }: AssistantFilesProps) {
   const [isOpen, setIsOpen] = useState(true);
-
   const formatFileSize = (bytes: number) => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     if (bytes === 0) return '0 Byte';
     const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)).toString());
     return Math.round(bytes / Math.pow(1024, i)) + ' ' + sizes[i];
   };
-
   const isReferenced = (file: File) => {
     return referencedFiles.some(ref => {
       return file.name.toLowerCase().includes(ref.name.toLowerCase()) ||
              ref.name.toLowerCase().includes(file.name.toLowerCase());
     });
   };
-
   return (
     <div className="w-full mt-4 bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
       <button

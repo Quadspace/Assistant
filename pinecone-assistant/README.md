@@ -1,63 +1,84 @@
-# Forklift Assistant Sample App
+# Pinecone Assistant Setup Instructions
 
-This sample app connects to an existing Forklift Assistant to expose a public or private chat interface. Users can use the chat interace to ask your assistant questions, and it will use any documents you have uploaded to it to answer the questions. 
+This document provides detailed instructions for setting up and deploying your Industrial Engineer.ai Pinecone Assistant application.
 
-### Built With
+## Prerequisites
 
-- Forklift Assistant
-- Next.js + Python + Tailwind 
-- Node version 20 or higher
+1. A Pinecone account with access to create Assistants
+2. Node.js and npm installed
+3. Git for version control
 
----
-## Running the Sample App
+## Setting Up Your Pinecone Assistant
 
-### Want to move fast?
+1. **Create a Pinecone Assistant**:
+   - Go to [Pinecone Console](https://app.pinecone.io)
+   - Navigate to the Assistants section
+   - Click "Create Assistant"
+   - Name your assistant (e.g., "forklift-maintenance" or any other name relevant to your business)
+   - Configure the assistant with appropriate knowledge and settings
+   - Note down the assistant name for the next step
 
-Use `npx create-pinecone-app` to adopt this project quickly.
-This will clone the project, and prompt you for necessary secrets. Make sure you've created your assistant and uploaded your files in the Pinecone console at this point.
+2. **Configure Environment Variables**:
+   - In the project root, create a `.env.local` file (or edit the existing one)
+   - Set the following variables:
+     ```
+     PINECONE_API_KEY=your_pinecone_api_key
+     PINECONE_ASSISTANT_NAME=your_assistant_name
+     SHOW_ASSISTANT_FILES=true
+     ```
+   - Replace `your_pinecone_api_key` with your actual Pinecone API key
+   - Replace `your_assistant_name` with the name of the assistant you created
 
-### Create a Pinecone API key
-**Grab an API key [here](https://app.pinecone.io)**
+## Running the Application Locally
 
-Before you start, this application requires you to build Forklift Assistant in the Console first. You'll also need to upload files to this assistant. Any set of PDF files will do!
+1. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
 
-### Environment Variables
+2. **Start Development Server**:
+   ```bash
+   npm run dev
+   ```
 
-This app uses two optional environment variables to control certain features:
+3. **Access the Application**:
+   - Open your browser and navigate to `http://localhost:3000`
+   - You should see your Industrial Engineer.ai Assistant interface with Victoria's Secret branding
 
-1. `SHOW_ASSISTANT_FILES`: Set to 'true' to display the files uploaded to your Forklift Assistant. Default is 'false'.
-2. `SHOW_CITATIONS`: Set to 'true' to display citations and references in the assistant's responses. Default is 'true'.
+## Deployment
 
-You can set these variables in your `.env.local` file:
+1. **Build for Production**:
+   ```bash
+   npm run build
+   ```
 
-```
-SHOW_ASSISTANT_FILES=true
-SHOW_CITATIONS=true
-```
+2. **Start Production Server**:
+   ```bash
+   npm start
+   ```
 
-### Start the project
+3. **Deploy to Your Hosting Provider**:
+   - Deploy the built application to your preferred hosting provider
+   - Ensure environment variables are properly set in your production environment
 
-#### Dependency Installation
-
-```bash
-cd pinecone-assistant && npm install 
-```
-Then, start the development server: 
-
-```bash
-npm run dev
-```
-
-Visit http://localhost:3000 to access the chat interface.
-
-## Project structure
-
-![Forklift Assistant Sample App Architecture](./public/pinecone-assistant-architecture.png)
-
----
 ## Troubleshooting
 
-Experiencing any issues with the sample app?
-Submit an issue, create a PR, or post in our community forum!
+If you encounter the error message "No assistant found with name...", please check:
 
----
+1. That you've created the Pinecone Assistant with the exact name specified in your environment variables
+2. That your Pinecone API key has access to the specified assistant
+3. That the assistant is properly configured and active in your Pinecone account
+
+## Customization
+
+The application includes your Industrial Engineer.ai and Victoria's Secret branding. If you need to update these assets:
+
+1. Replace the logo files in the `src/app` directory:
+   - `GreenBlack.png` (Industrial Engineer.ai logo)
+   - `VS&Co_logo_Black.svg` (Victoria's Secret logo)
+
+2. Update the title and metadata in `src/app/layout.tsx` if needed
+
+## Support
+
+For additional support or questions about this implementation, please contact your development team or Pinecone support.
