@@ -1,20 +1,8 @@
-export interface File {
-    id: string;
-    name: string;
-    size: number;
-    created_at: string;
+declare module 'extended-eventsource' {
+  export class EventSource {
+    constructor(url: string, options: any);
+    onmessage: (event: any) => void;
+    onerror: (error: any) => void;
+    close: () => void;
   }
- 
-  // A 'Reference' is a file that the Assistant has access to and used 
-  // when answering a user question
-  export interface Reference {
-    name: string;
-    url?: string;
-  }
-  export interface Message {
-    id: string;
-    content: string;
-    role: 'user' | 'assistant';
-    timestamp: string;
-    references?: Reference[]; 
-  }
+}
