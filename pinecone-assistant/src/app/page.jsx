@@ -109,7 +109,7 @@ export default function ChatInterface() {
               className="object-contain"
             />
           </div>
-          <div className="font-medium text-lg">Pinecone Assistant</div>
+          <div className="font-medium text-lg">Forklift Assistant</div>
         </div>
         
         {/* Conversation History */}
@@ -171,7 +171,7 @@ export default function ChatInterface() {
                     className="object-contain"
                   />
                 </div>
-                <h2 className="text-2xl font-medium text-neutral-800 mb-2">Welcome to Pinecone Assistant</h2>
+                <h2 className="text-2xl font-medium text-neutral-800 mb-2">Welcome to Forklift Assistant</h2>
                 <p className="text-neutral-600 max-w-md mb-8">
                   Ask questions about your documents or upload new files to get started.
                 </p>

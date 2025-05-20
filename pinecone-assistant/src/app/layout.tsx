@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Pinecone Assistant Sample App",
-  description: "Connect a chat interface to an existing Pinecone Assistant",
+  title: "Forklift Assistant Sample App",
+  description: "Connect a chat interface to an existing Forklift Assistant",
 };
 
 export default function RootLayout({
