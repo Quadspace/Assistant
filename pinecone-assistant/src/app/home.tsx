@@ -5,10 +5,13 @@ import ReactMarkdown from 'react-markdown';
 import { Message, File, Reference } from './types';
 import AssistantFiles from './components/AssistantFiles';
 import { chat } from './actions';
+import { readStreamableValue } from 'ai/rsc';
+
 interface HomeProps {
   initialShowAssistantFiles: boolean;
   showCitations: boolean;
 }
+
 export default function Home({ initialShowAssistantFiles, showCitations }: HomeProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -20,6 +23,7 @@ export default function Home({ initialShowAssistantFiles, showCitations }: HomeP
   const [referencedFiles, setReferencedFiles] = useState<Reference[]>([]);
   const [showAssistantFiles, setShowAssistantFiles] = useState(initialShowAssistantFiles);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     // Check if the assistant exists
     const checkAssistant = async () => {
@@ -42,6 +46,7 @@ export default function Home({ initialShowAssistantFiles, showCitations }: HomeP
     };
     checkAssistant();
   }, []);
+
   const fetchFiles = async () => {
     try {
       const response = await fetch('/api/files');
@@ -55,19 +60,23 @@ export default function Home({ initialShowAssistantFiles, showCitations }: HomeP
       console.error('Error fetching files:', err);
     }
   };
+
   const handleChat = async () => {
     if (!input.trim() || isStreaming) return;
+
     const userMessage: Message = {
       id: uuidv4(),
       content: input,
       role: 'user',
       timestamp: new Date().toISOString(),
     };
+
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsStreaming(true);
     setError(null);
     const newReferences: Reference[] = [];
+
     try {
       const assistantMessage: Message = {
         id: uuidv4(),
@@ -75,133 +84,126 @@ export default function Home({ initialShowAssistantFiles, showCitations }: HomeP
         role: 'assistant',
         timestamp: new Date().toISOString(),
       };
+      
       setMessages((prev) => [...prev, assistantMessage]);
+      
+      // Get the response from the chat function
       const response = await chat(messages.concat(userMessage).map(m => ({ role: m.role, content: m.content })));
-      const reader = response.object.getReader();
-      let done = false;
-      let content = '';
-      while (!done) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
-        if (value) {
-          try {
-            const data = JSON.parse(value);
-            if (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.content) {
-              content += data.choices[0].delta.content;
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  ...updated[updated.length - 1],
-                  content,
-                };
-                return updated;
-              });
-            }
-            // Check for references/citations in the response
-            if (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.references) {
-              const refs = data.choices[0].delta.references;
-              refs.forEach((ref: Reference) => {
-                if (!newReferences.some(r => r.name === ref.name)) {
-                  newReferences.push(ref);
+      
+      // Use readStreamableValue to process the stream
+      if (response && response.object) {
+        try {
+          // Process the stream using the async iterator pattern
+          for await (const chunk of readStreamableValue(response.object)) {
+            try {
+              if (chunk) {
+                const data = JSON.parse(chunk);
+                if (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.content) {
+                  // Update the assistant message with the new content
+                  setMessages((prev) => {
+                    const updatedMessages = [...prev];
+                    const lastMessage = updatedMessages[updatedMessages.length - 1];
+                    if (lastMessage.role === 'assistant') {
+                      lastMessage.content += data.choices[0].delta.content;
+                    }
+                    return updatedMessages;
+                  });
                 }
-              });
+                
+                // Check for references in the response
+                if (data.references) {
+                  const refs = data.references.map((ref: any) => ({
+                    file_id: ref.file_id,
+                    quote: ref.quote || '',
+                  }));
+                  setReferencedFiles((prev) => [...prev, ...refs]);
+                }
+              }
+            } catch (e) {
+              console.error('Error processing stream chunk:', e);
             }
-          } catch (e) {
-            console.error('Error parsing stream data:', e);
           }
+        } catch (err) {
+          console.error('Error reading stream:', err);
+          setError('An error occurred while streaming the response.');
+        } finally {
+          setIsStreaming(false);
         }
       }
-      if (newReferences.length > 0) {
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
-            references: newReferences,
-          };
-          return updated;
-        });
-        setReferencedFiles((prev) => {
-          const combined = [...prev];
-          newReferences.forEach(ref => {
-            if (!combined.some(r => r.name === ref.name)) {
-              combined.push(ref);
-            }
-          });
-          return combined;
-        });
-      }
     } catch (err) {
-      console.error('Error in chat:', err);
-      setError('Failed to get a response. Please try again later.');
-    } finally {
+      console.error('Chat error:', err);
       setIsStreaming(false);
+      setError('Failed to get a response. Please try again.');
+      
+      // Remove the empty assistant message if there was an error
+      setMessages((prev) => prev.filter(m => m.content !== ''));
     }
   };
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Scroll to bottom when messages change
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-4 md:p-8 bg-gray-50 dark:bg-gray-900">
-      <div className="w-full max-w-5xl">
-        <h1 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-200">Pinecone Assistant</h1>
-        {assistantExists !== null && (
-          <div className="text-sm mb-4 text-gray-600 dark:text-gray-400">
-            {assistantExists ? (
-              <span>Connected to assistant: <span className="font-semibold">{assistantName}</span></span>
-            ) : (
-              <span className="text-red-500">No assistant found with name: <span className="font-semibold">{assistantName}</span></span>
-            )}
-          </div>
-        )}
+    <main className="flex min-h-screen flex-col items-center justify-between p-4 md:p-24">
+      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm flex">
+        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
+          {assistantName ? `Connected to Pinecone Assistant: ${assistantName}` : 'Connecting to Pinecone Assistant...'}
+        </p>
       </div>
+
       {assistantExists ? (
-        <div className="w-full max-w-5xl bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
-          <div className="flex flex-col md:flex-row h-[calc(100vh-200px)]">
-            <div className="flex-grow flex flex-col p-4 overflow-hidden">
-              <div className="flex-grow overflow-y-auto mb-4 space-y-4">
+        <div className="w-full max-w-5xl">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-4 min-h-[400px] max-h-[600px] overflow-y-auto">
                 {messages.length === 0 ? (
-                  <div className="text-center text-gray-500 dark:text-gray-400 mt-8">
-                    <p>Start a conversation with your Pinecone Assistant.</p>
-                    <p className="text-sm mt-2">Your assistant has access to files you've uploaded to it.</p>
+                  <div className="text-center text-gray-500 dark:text-gray-400 mt-20">
+                    <p className="text-xl mb-2">👋 Welcome to Pinecone Assistant</p>
+                    <p>Start a conversation by typing a message below.</p>
                   </div>
                 ) : (
                   messages.map((message) => (
-                    <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`flex ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'} items-start max-w-[80%]`}>
-                        <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${
-                          message.role === 'user' ? 'bg-indigo-100 text-indigo-500' : 'bg-gray-100 text-gray-500'
-                        } mr-2 ml-2`}>
-                          {message.role === 'user' ? '👤' : '🤖'}
+                    <div key={message.id} className={`mb-4 ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
+                      <div className="flex items-start gap-2.5">
+                        <div className={`flex flex-col w-full ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+                          <span className={`text-xs text-gray-500 dark:text-gray-400 mb-1`}>
+                            {message.role === 'user' ? 'You' : 'Assistant'}
+                          </span>
+                          <span className={`px-4 py-2 rounded-lg inline-block ${
+                            message.role === 'user' 
+                              ? 'bg-indigo-500 text-white' 
+                              : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-300'
+                          } max-w-[80%] break-words`}>
+                            <ReactMarkdown
+                              components={{
+                                a: ({ node, ...props }) => (
+                                  <a {...props} className="text-blue-600 dark:text-blue-400 hover:underline">
+                                    🔗 {props.children}
+                                  </a>
+                                ),
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                            {message.references && showCitations && (
+                              <div className="mt-2">
+                                <ul>
+                                  {message.references.map((ref, i) => (
+                                    <li key={i}>
+                                      <a href={ref.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+                                        {ref.name}
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </span>
                         </div>
-                        <span className={`px-4 py-2 rounded-lg ${
-                          message.role === 'user' ? 
-                          'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                        } max-w-[80%] break-words`}>
-                          <ReactMarkdown
-                            components={{
-                              a: ({ node, ...props }) => (
-                                <a {...props} className="text-blue-600 dark:text-blue-400 hover:underline">
-                                  🔗 {props.children}
-                                </a>
-                              ),
-                            }}
-                          >
-                            {message.content}
-                          </ReactMarkdown>
-                          {message.references && showCitations && (
-                            <div className="mt-2">
-                              <ul>
-                                {message.references.map((ref, i) => (
-                                  <li key={i}>
-                                    <a href={ref.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
-                                      {ref.name}
-                                    </a>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </span>
                       </div>
                     </div>
                   ))
@@ -262,7 +264,7 @@ export default function Home({ initialShowAssistantFiles, showCitations }: HomeP
             </ol>
           </div>
         </div>
-      )}
+       )}
       <div className="mt-8 text-sm text-gray-500 flex space-x-4">
         <a href="https://www.pinecone.io/blog/pinecone-assistant/" target="_blank" rel="noopener noreferrer" className="hover:text-indigo-600 transition-colors">
           ℹ️ What are Pinecone Assistants?
@@ -272,5 +274,5 @@ export default function Home({ initialShowAssistantFiles, showCitations }: HomeP
         </a>
       </div>
     </main>
-  );
+   );
 }

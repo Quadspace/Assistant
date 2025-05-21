@@ -1,10 +1,12 @@
 'use server'
 import { createStreamableValue } from 'ai/rsc'
 import { EventSource } from 'extended-eventsource';
+
 type Message = {
   role: string;
   content: string;
 }
+
 export async function chat(messages: Message[]) {
   // Create an initial stream, which we'll populate with events from the Pinecone Assistants API
   const stream = createStreamableValue()
@@ -19,10 +21,12 @@ export async function chat(messages: Message[]) {
     body: JSON.stringify({
       stream: true,
       messages,
-    }),
-headers: process.env.PINECONE_API_KEY ? {
-  'Api-Key': process.env.PINECONE_API_KEY,
-} : undefined,
+    } ),
+    headers: process.env.PINECONE_API_KEY ? {
+      'Api-Key': process.env.PINECONE_API_KEY,
+    } : undefined,
+    disableRetry: true,
+  });
   
   // When we receive a new message from the Pinecone Assistant API, we update the stream
   // Unless the Assistant is done, in which case we close the stream
