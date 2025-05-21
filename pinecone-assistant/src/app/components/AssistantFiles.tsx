@@ -15,8 +15,8 @@ export default function AssistantFiles({ files, referencedFiles }: AssistantFile
   };
   const isReferenced = (file: File) => {
     return referencedFiles.some(ref => {
-      return file.name.toLowerCase().includes(ref.name.toLowerCase()) ||
-             ref.name.toLowerCase().includes(file.name.toLowerCase());
+      return file.filename.toLowerCase().includes(ref.file_id.toLowerCase()) ||
+             ref.file_id.toLowerCase().includes(file.filename.toLowerCase());
     });
   };
   return (
@@ -37,8 +37,8 @@ export default function AssistantFiles({ files, referencedFiles }: AssistantFile
                 className="w-full sm:w-1/2 md:w-1/3 px-2 mb-4 relative"
               >
                 <div className={`bg-gray-100 dark:bg-gray-700 p-4 rounded-lg ${isReferenced(file) ? 'border-2 border-blue-500 dark:border-blue-400' : ''}`}>
-                  <h3 className="font-semibold truncate text-gray-800 dark:text-gray-200">{file.name}</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Size: {formatFileSize(file.size)}</p>
+                  <h3 className="font-semibold truncate text-gray-800 dark:text-gray-200">{file.filename}</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Size: {formatFileSize(file.bytes)}</p>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     Created: {new Date(file.created_at).toLocaleDateString()}
                   </p>
