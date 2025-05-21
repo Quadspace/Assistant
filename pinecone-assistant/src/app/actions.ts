@@ -20,11 +20,9 @@ export async function chat(messages: Message[]) {
       stream: true,
       messages,
     }),
-    headers: {
-      'Api-Key': process.env.PINECONE_API_KEY,
-    },
-    disableRetry: true,
-  });
+headers: process.env.PINECONE_API_KEY ? {
+  'Api-Key': process.env.PINECONE_API_KEY,
+} : undefined,
   
   // When we receive a new message from the Pinecone Assistant API, we update the stream
   // Unless the Assistant is done, in which case we close the stream
